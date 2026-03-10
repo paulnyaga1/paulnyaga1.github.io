@@ -98,47 +98,70 @@
 <!--  /container  -->
 </span>
 <!--  /content  -->
+<script>
+(function() {
+var CHAT_URL = "https://api.nyaga.net/chat";
+var chat = document.getElementById("chat");
+var inp = document.getElementById("inp");
+var btn = document.getElementById("btn");
+
+if (chat && inp && btn) {
+  function append(role, text) {
+    var div = document.createElement("div");
+    div.className = role === "user" ? "alert alert-success" : "alert alert-info";
+    div.textContent = text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function send() {
+    var q = inp.value.trim();
+    if (!q) return;
+    inp.value = "";
+    append("user", q);
+    btn.disabled = true;
+    fetch(CHAT_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: q })
+    })
+    .then(function(res) {
+      var contentType = res.headers.get("content-type") || "";
+      var bodyPromise = contentType.indexOf("application/json") !== -1
+        ? res.json()
+        : res.text().then(function(text) { return { detail: text }; });
+      return bodyPromise.then(function(data) {
+        return { res: res, data: data || {} };
+      });
+    })
+    .then(function(ctx) {
+      var res = ctx.res;
+      var data = ctx.data;
+
+      if (!res.ok) {
+        var msg = data.detail || data.answer || ("Request failed (" + res.status + ").");
+        if (res.status === 429) {
+          var retryAfter = res.headers.get("Retry-After");
+          if (retryAfter) msg += " Retry after " + retryAfter + "s.";
+        }
+        append("bot", msg);
+        return;
+      }
+
+      append("bot", data.answer || "(no answer)");
+    })
+    .catch(function() { append("bot", "Error contacting backend."); })
+    .finally(function() { btn.disabled = false; });
+  }
+
+  btn.addEventListener("click", send);
+  inp.addEventListener("keydown", function(e) { if (e.key === "Enter") send(); });
+}
+})();
+</script>
 <!-- Bootstrap core JavaScript -->
 <!-- Placed at the end of the document so the pages load faster -->
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
 <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/js/bootstrap.min.js"></script>
-<script>
-  (function() {
-    var CHAT_URL = "https://api.nyaga.net/chat";
-    var chat = document.getElementById("chat");
-    var inp = document.getElementById("inp");
-    var btn = document.getElementById("btn");
-
-    if (chat && inp && btn) {
-      function append(role, text) {
-        var div = document.createElement("div");
-        div.className = role === "user" ? "alert alert-success" : "alert alert-info";
-        div.textContent = text;
-        chat.appendChild(div);
-        chat.scrollTop = chat.scrollHeight;
-      }
-
-      function send() {
-        var q = inp.value.trim();
-        if (!q) return;
-        inp.value = "";
-        append("user", q);
-        btn.disabled = true;
-        fetch(CHAT_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: q })
-        })
-        .then(function(res) { return res.json(); })
-        .then(function(data) { append("bot", data.answer || "(no answer)"); })
-        .catch(function() { append("bot", "Error contacting backend."); })
-        .finally(function() { btn.disabled = false; });
-      }
-
-      btn.addEventListener("click", send);
-      inp.addEventListener("keydown", function(e) { if (e.key === "Enter") send(); });
-    }
-  })();
-</script>
 </body>
 </html>
